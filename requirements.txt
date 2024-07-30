@@ -1,0 +1,5 @@
+fastapi~=0.111.1
+pydantic~=2.8.2
+stop-words~=2018.7.23
+stanza~=1.8.2
+nltk~=3.8.1
