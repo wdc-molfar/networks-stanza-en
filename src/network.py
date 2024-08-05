@@ -1,4 +1,4 @@
-# networks.py
+# network.py
 
 import networkx as nx
 
