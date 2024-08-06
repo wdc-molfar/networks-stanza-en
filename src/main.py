@@ -11,13 +11,15 @@ import warnings
 from models import download_model, load_model
 from nlprocessing import stanza_nlp
 from weighers import tuples_builder, time_series
-from networks import directed_weighted_network_terms
+from network import directed_weighted_network_terms
 from graphprocessing import network_json
+from similarity import frobenius
 import os, io
 
 warnings.filterwarnings("ignore", message=r"\[W033\]", category=UserWarning)
 
 
+# Load stop words
 def load_stop_words(lang):
     if os.path.isfile(lang + '.txt'):
         stop_words = (io.open(lang + '.txt', 'r', encoding="utf-8").read()).split()
@@ -26,7 +28,8 @@ def load_stop_words(lang):
     return stop_words
 
 
-def semantic_networks(text, model, stop_words):
+# Formation semantic network
+def semantic_network(text, model, stop_words):
     allTermsTags, sentsTermsTags = stanza_nlp(text, model, stop_words)
     allTermsTagsGTF = tuples_builder(allTermsTags)
     sentsTseries, sentsTuples = time_series(allTermsTagsGTF, sentsTermsTags)
@@ -35,9 +38,22 @@ def semantic_networks(text, model, stop_words):
     return {"network_json": network_json(dwnt)}
 
 
-# Create subclasses defining the schema, or data shapes, you want to receive
-class Item(BaseModel):
+# Calculate semantic similarity.py of two networks
+def semantic_similarity(network1, network2):
+    return {"network_json": frobenius(network1, network2)}
+
+# Create subclasses defining the schema, or data shapes, you want to receive for run_semantic_network
+class Item_network(BaseModel):
     text: str
+
+    class Config:
+        orm_mode = True
+
+
+# Create subclasses defining the schema, or data shapes, you want to receive for run_semantic_similarity
+class Item_similarity(BaseModel):
+    network1: str
+    network2: str
 
     class Config:
         orm_mode = True
@@ -61,14 +77,35 @@ async def download_stanza_model():
 
 
 # Define a path POST-operation decorator
-@app.post("/networks")
+@app.post("/network")
 # Define the path operation function
-async def run_semantic_networks(input_json: Item):
+async def run_semantic_network(input_json: Item_network):
     # Get text from input JSON object
     text = input_json.text
 
     try:
-        output = {"request": input_json, "response": semantic_networks(text, model, stop_words)}
+        output = {"request": input_json, "response": semantic_network(text, model, stop_words)}
+
+    except BaseException as ex:
+        ex_type, ex_value, ex_traceback = sys.exc_info()
+        output = {"error": ''}
+        output['error'] += "Exception type : %s; \n" % ex_type.__name__
+        output['error'] += "Exception message : %s\n" % ex_value
+        output['error'] += "Exception traceback : %s\n" % "".join(
+            traceback.TracebackException.from_exception(ex).format())
+
+    return output
+
+# Define a path POST-operation decorator
+@app.post("/similarity")
+# Define the path operation function
+async def run_semantic_similarity(input_json: Item_similarity):
+    # Get text from input JSON object
+    network1 = input_json.network1
+    network2 = input_json.network2
+
+    try:
+        output = {"request": input_json, "response": semantic_similarity(network1, network2)}
 
     except BaseException as ex:
         ex_type, ex_value, ex_traceback = sys.exc_info()
