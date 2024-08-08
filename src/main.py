@@ -12,8 +12,9 @@ from models import download_model, load_model
 from nlprocessing import stanza_nlp
 from weighers import tuples_builder, time_series
 from network import directed_weighted_network_terms
-from graphprocessing import network_json
-from similarity import frobenius
+from netprocessing import network_json
+from netprocessing import json_to_network, network_to_matrix
+from dissimilarity import frobenius
 import os, io
 
 warnings.filterwarnings("ignore", message=r"\[W033\]", category=UserWarning)
@@ -38,9 +39,24 @@ def semantic_network(text, model, stop_words):
     return {"network_json": network_json(dwnt)}
 
 
-# Calculate semantic similarity.py of two networks
-def semantic_similarity(network1, network2):
-    return {"network_json": frobenius(network1, network2)}
+# Calculate semantic dissimilarity.py of two networks
+def semantic_similarity(json_network1, json_network2):
+    # Convert JSON to networkx
+    network1 = json_to_network(json_network1)
+    network2 = json_to_network(json_network2)
+
+    # Get all unique nodes from two networks
+    nodelist = list(set(list(network1.nodes()) + list(network2.nodes())))
+
+    # Add all the nodes from one network to another
+    network1.add_nodes_from(network2)
+    network2.add_nodes_from(network1)
+
+    # Return the graph adjacency matrix as a NumPy matrix
+    matrix1 = network_to_matrix(network1, nodelist)
+    matrix2 = network_to_matrix(network2, nodelist)
+
+    return {"dissimilarity": frobenius(matrix1, matrix2)}
 
 # Create subclasses defining the schema, or data shapes, you want to receive for run_semantic_network
 class Item_network(BaseModel):
@@ -101,11 +117,11 @@ async def run_semantic_network(input_json: Item_network):
 # Define the path operation function
 async def run_semantic_similarity(input_json: Item_similarity):
     # Get text from input JSON object
-    network1 = input_json.network1
-    network2 = input_json.network2
+    json_network1 = input_json.network1
+    json_network2 = input_json.network2
 
     try:
-        output = {"request": input_json, "response": semantic_similarity(network1, network2)}
+        output = {"request": input_json, "response": semantic_similarity(json_network1, json_network2)}
 
     except BaseException as ex:
         ex_type, ex_value, ex_traceback = sys.exc_info()
